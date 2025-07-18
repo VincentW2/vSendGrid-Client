@@ -26,6 +26,7 @@ DEFAULT_SETTINGS = {
 }
 
 def prompt_for_settings():
+    # This function is now unused in GUI-only mode, but kept for reference or CLI fallback.
     print("\n--- Initial Setup: Please enter your email campaign settings ---")
     sender_email = input("Enter your verified sender email: ").strip()
     while not sender_email or '@' not in sender_email:
@@ -44,16 +45,12 @@ def prompt_for_settings():
     print("Settings saved to settings.json!\n")
     return settings
 
-if not os.path.exists(SETTINGS_FILE):
-    SETTINGS = prompt_for_settings()
-else:
+# Only load settings from file; do not prompt on import
+if os.path.exists(SETTINGS_FILE):
     with open(SETTINGS_FILE, 'r') as f:
         SETTINGS = json.load(f)
-    if (
-        not SETTINGS.get("sender_email") or SETTINGS["sender_email"] == DEFAULT_SETTINGS["sender_email"] or
-        not SETTINGS.get("sendgrid_api_key") or SETTINGS["sendgrid_api_key"] == DEFAULT_SETTINGS["sendgrid_api_key"]
-    ):
-        SETTINGS = prompt_for_settings()
+else:
+    SETTINGS = {}
 
 SENDER_EMAIL: str = str(SETTINGS.get("sender_email", "")).strip()
 SENDER_NAME: str = str(SETTINGS.get("sender_name", "John Doe"))
@@ -193,7 +190,7 @@ def send_campaign_email(recipient_email: str, show_output: bool = True):
 
 class EmailCampaignManager:
     """Manages email campaigns with CSV reading and progress tracking"""
-    def __init__(self, csv_file: str = None, progress_file: str = None):
+    def __init__(self, csv_file: str = "", progress_file: str = ""):
         self.csv_file = csv_file or CSV_FILE
         progress_dir = "progress"
         if not os.path.exists(progress_dir):
@@ -284,12 +281,12 @@ class EmailCampaignManager:
         selected_count = min(limit, len(unsent_emails))
         selected_emails = random.sample(unsent_emails, selected_count)
         return selected_emails
-    def mark_email_sent(self, email: str, success: bool, error_message: str = None):
+    def mark_email_sent(self, email: str, success: bool, error_message: str = ""):
         email_record = {
             "email": email,
             "timestamp": datetime.now().isoformat(),
             "success": success,
-            "error": error_message
+            "error": error_message or ""
         }
         if "sent_emails" not in self.progress_data:
             self.progress_data["sent_emails"] = []
