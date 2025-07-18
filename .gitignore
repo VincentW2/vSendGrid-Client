@@ -1,0 +1,7 @@
+sendgrid_email.log
+*.json
+*.csv
+__pycache__/
+progress/
+email.html
+email.txt
