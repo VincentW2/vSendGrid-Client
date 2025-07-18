@@ -3,6 +3,7 @@ from tkinter import simpledialog, messagebox, filedialog, scrolledtext, ttk
 import threading
 import os
 import json
+import sys
 from mail import (
     SETTINGS_FILE, DEFAULT_SETTINGS, SETTINGS, SENDER_EMAIL, SENDER_NAME, SENDGRID_API_KEY, CSV_FILE,
     EmailCampaignManager, run_email_campaign, send_campaign_email
@@ -11,28 +12,78 @@ from mail import (
 def gui_first_run_settings():
     root = tk.Tk()
     root.withdraw()  # Hide main window
-    messagebox.showinfo("First Run Setup", "Welcome! Please enter your email campaign settings.")
-    while True:
-        sender_email = simpledialog.askstring("Sender Email", "Enter your verified sender email:")
-        if sender_email and '@' in sender_email:
-            break
-        messagebox.showerror("Invalid Email", "Please enter a valid sender email.")
-    sender_name = simpledialog.askstring("Sender Name", "Enter sender name:") or "John Doe"
-    while True:
-        sendgrid_api_key = simpledialog.askstring("SendGrid API Key", "Enter your SendGrid API key:")
-        if sendgrid_api_key and sendgrid_api_key != DEFAULT_SETTINGS["sendgrid_api_key"]:
-            break
-        messagebox.showerror("Invalid API Key", "Please enter a valid SendGrid API key.")
-    settings = {
-        "sender_email": sender_email,
-        "sender_name": sender_name,
-        "sendgrid_api_key": sendgrid_api_key
-    }
-    with open(SETTINGS_FILE, 'w') as f:
-        json.dump(settings, f, indent=2)
-    messagebox.showinfo("Setup Complete", "Settings saved! You can now use the app.")
-    root.destroy()
-    return settings
+    # Custom top-level window for setup
+    setup_win = tk.Toplevel()
+    setup_win.title("SendGrid GUI Setup")
+    setup_win.geometry("540x350")  # Widened window
+    setup_win.resizable(False, False)
+    setup_win.configure(bg="#f7f7fa")
+    setup_win.grab_set()
+    # Fonts
+    font_title = ("Segoe UI Variable", 20, "bold")
+    font_label = ("Segoe UI Variable", 12)
+    font_entry = ("Segoe UI Variable", 13)
+    # Title
+    title = tk.Label(setup_win, text="SendGrid GUI Setup", font=font_title, bg="#f7f7fa", pady=14)
+    title.pack()
+    # Frame for fields
+    frame = tk.Frame(setup_win, bg="#f7f7fa")
+    frame.pack(padx=28, pady=8, fill=tk.BOTH, expand=True)
+    # Sender Email
+    lbl_email = tk.Label(frame, text="Sender Email (must be verified):", font=font_label, bg="#f7f7fa", anchor='w')
+    lbl_email.pack(fill=tk.X, pady=(8, 2))
+    entry_email = tk.Entry(frame, font=font_entry, width=32, bd=2, relief="groove")
+    entry_email.pack(fill=tk.X, pady=(0, 8))
+    # Sender Name
+    lbl_name = tk.Label(frame, text="Sender Name (required):", font=font_label, bg="#f7f7fa", anchor='w')
+    lbl_name.pack(fill=tk.X, pady=(8, 2))
+    entry_name = tk.Entry(frame, font=font_entry, width=32, bd=2, relief="groove")
+    entry_name.pack(fill=tk.X, pady=(0, 8))
+    # SendGrid API Key
+    lbl_key = tk.Label(frame, text="SendGrid API Key:", font=font_label, bg="#f7f7fa", anchor='w')
+    lbl_key.pack(fill=tk.X, pady=(8, 2))
+    entry_key = tk.Entry(frame, font=font_entry, width=32, bd=2, relief="groove", show="*")
+    entry_key.pack(fill=tk.X, pady=(0, 2))
+    hint_key = tk.Label(frame, text="Find your API key at: sendgrid.com > Settings > API Keys", font=("Segoe UI", 9), fg="#888", bg="#f7f7fa", anchor='w')
+    hint_key.pack(fill=tk.X, pady=(0, 8))
+    # Buttons
+    btn_frame = tk.Frame(setup_win, bg="#f7f7fa")
+    btn_frame.pack(pady=(8, 12))
+    def on_submit():
+        sender_email = entry_email.get().strip()
+        sender_name = entry_name.get().strip()
+        sendgrid_api_key = entry_key.get().strip()
+        if not sender_email or '@' not in sender_email:
+            messagebox.showerror("Invalid Email", "Please enter a valid sender email.")
+            return
+        if not sender_name:
+            messagebox.showerror("Missing Sender Name", "Please enter a sender name.")
+            return
+        if not sendgrid_api_key or sendgrid_api_key == DEFAULT_SETTINGS["sendgrid_api_key"]:
+            messagebox.showerror("Invalid API Key", "Please enter a valid SendGrid API key.")
+            return
+        settings = {
+            "sender_email": sender_email,
+            "sender_name": sender_name,
+            "sendgrid_api_key": sendgrid_api_key
+        }
+        with open(SETTINGS_FILE, 'w') as f:
+            json.dump(settings, f, indent=2)
+        messagebox.showinfo("Setup Complete", "Settings saved! You can now use the app.")
+        setup_win.destroy()
+        root.destroy()
+        return settings
+    submit_btn = tk.Button(btn_frame, text="Save Settings", font=font_label, bg="#50C878", fg="white", relief="flat", padx=18, pady=6, command=on_submit)
+    submit_btn.pack(side=tk.LEFT, padx=8)
+    cancel_btn = tk.Button(btn_frame, text="Cancel", font=font_label, bg="#e74c3c", fg="white", relief="flat", padx=18, pady=6, command=lambda: (setup_win.destroy(), root.destroy(), sys.exit(0)))
+    cancel_btn.pack(side=tk.LEFT, padx=8)
+    def on_close():
+        setup_win.destroy()
+        root.destroy()
+        sys.exit(0)
+    setup_win.protocol("WM_DELETE_WINDOW", on_close)
+    setup_win.mainloop()
+    return None
 
 def check_settings_gui():
     # If settings.json is missing or incomplete, run GUI setup
@@ -104,13 +155,15 @@ class EmailGUI:
         self.console.config(state=tk.DISABLED)
 
     def refresh_status(self):
-        campaign = EmailCampaignManager(csv_file=SETTINGS.get("csv_file", "final_emails_master.csv"))
+        campaign = EmailCampaignManager(csv_file=SETTINGS.get("csv_file", ""))
         emails = campaign.load_email_list()
         stats = campaign.get_campaign_stats()
         sender = SETTINGS.get("sender_email", "N/A")
-        csv_file = SETTINGS.get("csv_file", "final_emails_master.csv")
-        info = f"Current CSV: {csv_file}\nCurrent sender email: {sender}\nTotal emails in CSV: {len(emails)}\nTotal sent: {stats.get('emails_sent', 0)}\nFirst 5 emails: {', '.join(emails[:5]) if emails else 'None'}"
+        csv_file = SETTINGS.get("csv_file", "")
+        info = f"Current CSV: {csv_file if csv_file else 'Not set'}\nCurrent sender email: {sender}\nTotal emails in CSV: {len(emails)}\nTotal sent: {stats.get('emails_sent', 0)}\nFirst 5 emails: {', '.join(emails[:5]) if emails else 'None'}"
         self.info_label.config(text=info)
+        if csv_file and not os.path.exists(csv_file):
+            messagebox.showerror("CSV File Not Found", f"The selected CSV file '{csv_file}' does not exist. Please choose a valid file.")
 
     def append_console(self, text):
         self.console.config(state=tk.NORMAL)
@@ -227,6 +280,8 @@ class EmailGUI:
                 json.dump(SETTINGS, f, indent=2)
             self.append_console(f"CSV file changed to: {new_csv}")
             self.refresh_status()
+        else:
+            messagebox.showwarning("No File Selected", "No CSV file was selected.")
 
     def show_app_info(self):
         info = (
